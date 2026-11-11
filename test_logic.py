@@ -283,5 +283,29 @@ class TestEndToEndWorkflow(unittest.TestCase):
             conn.close()
 
 
+class TestNeo4jAndGraphTraversal(unittest.TestCase):
+    """ทดสอบ Graph Database Adapter และการทำงานร่วมกับ Neo4j / Graph Fallback"""
+
+    def test_neo4j_driver_imported(self):
+        import neo4j_adapter
+        self.assertTrue(neo4j_adapter.HAS_NEO4J_DRIVER, "ควรติดตั้ง neo4j library สำเร็จ")
+
+    def test_get_graph_recipe_and_supplier(self):
+        # ทดสอบการวิเคราะห์สูตรอาหารและเกษตรกรคู่ค้า
+        results = logic.get_graph_recipe_and_supplier("M01")
+        self.assertTrue(len(results) > 0)
+        codes = [r["ingredient_code"] for r in results]
+        self.assertIn("I01", codes)
+        self.assertIn("I02", codes)
+
+    def test_get_graph_expiring_lots(self):
+        # ทดสอบการค้นหาล็อตใกล้หมดอายุ
+        lots = logic.get_graph_expiring_lots(days_threshold=5)
+        self.assertIsInstance(lots, list)
+        self.assertTrue(len(lots) > 0)
+        self.assertIn("lot_id", lots[0])
+        self.assertIn("ingredient", lots[0])
+
+
 if __name__ == "__main__":
     unittest.main()

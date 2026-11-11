@@ -570,3 +570,78 @@ def report(date_from, date_to):
                             GROUP BY i.id, m.type ORDER BY m.type, i.name""", (d1, d2)).fetchall()
     conn.close()
     return buy, moves
+
+
+# ---------------- Graph Traversal & Analytics (Neo4j / Fallback) ----------------
+
+def get_graph_recipe_and_supplier(menu_code):
+    """วิเคราะห์กราฟวัตถุดิบและเครือข่ายเกษตรกรผู้ผลิต (Graph Analysis)
+    หากเชื่อมต่อ Neo4j ได้จะดึงข้อมูลผ่าน Cypher Traversal ถ้าไม่ได้จะใช้ SQL Fallback"""
+    import neo4j_adapter
+    if neo4j_adapter.is_neo4j_available():
+        driver = neo4j_adapter.get_driver()
+        try:
+            return neo4j_adapter.query_menu_ingredients_graph(driver, menu_code)
+        finally:
+            driver.close()
+
+    # SQL Graph Fallback
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT i.code AS ingredient_code, i.name AS ingredient_name, r.qty_per_dish, i.unit,
+               f.name AS best_supplier_name, p.price AS best_supplier_price, p.ready_date
+        FROM menus m
+        JOIN recipe_items r ON r.menu_id = m.id
+        JOIN ingredients i ON i.id = r.ingredient_id
+        LEFT JOIN produce p ON p.ingredient_id = i.id
+        LEFT JOIN farmers f ON f.id = p.farmer_id
+        WHERE m.code = ?
+        ORDER BY p.price ASC
+    """, (menu_code,)).fetchall()
+    conn.close()
+
+    result = []
+    seen = set()
+    for row in rows:
+        icode = row["ingredient_code"]
+        if icode not in seen:
+            seen.add(icode)
+            best = None
+            if row["best_supplier_name"]:
+                best = {
+                    "farmer": row["best_supplier_name"],
+                    "price": row["best_supplier_price"],
+                    "ready_date": row["ready_date"]
+                }
+            result.append({
+                "ingredient_code": icode,
+                "ingredient_name": row["ingredient_name"],
+                "qty_per_dish": row["qty_per_dish"],
+                "unit": row["unit"],
+                "best_supplier": best
+            })
+    return result
+
+
+def get_graph_expiring_lots(days_threshold=2):
+    """หา Lot ที่ใกล้หมดอายุพร้อมชื่อวัตถุดิบ (Graph/Cypher Query)"""
+    import neo4j_adapter
+    if neo4j_adapter.is_neo4j_available():
+        driver = neo4j_adapter.get_driver()
+        try:
+            return neo4j_adapter.query_expiring_lots_graph(driver, days_threshold)
+        finally:
+            driver.close()
+
+    conn = get_conn()
+    target_date = (date.today() + timedelta(days=days_threshold)).isoformat()
+    rows = conn.execute("""
+        SELECT l.id AS lot_id, i.name AS ingredient, l.qty_left, i.unit, l.use_by
+        FROM lots l
+        JOIN ingredients i ON i.id = l.ingredient_id
+        WHERE l.qty_left > 0 AND l.use_by <= ?
+        ORDER BY l.use_by ASC
+    """, (target_date,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
