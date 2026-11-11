@@ -5,7 +5,6 @@ from tkinter import ttk, messagebox
 from datetime import date, timedelta
 
 import logic
-from db import get_conn
 from screens.widgets import make_table, clear_table, selected_id, FormDialog, to_float
 
 TYPE_TH = {"IN": "รับเข้า", "USE": "เบิกใช้", "WASTE": "ของเสีย", "ADJUST": "ปรับยอด"}
@@ -172,9 +171,7 @@ class InventoryScreen(ttk.Frame):
             r = dlg.result
             qty = logic.to_std(to_float(r["qty"], "จำนวน"), r["unit"], ing["unit"])
             # ระบบเสนอล็อตที่ควรใช้ก่อน ให้ผู้ใช้ยืนยัน
-            conn = get_conn()
-            plan = logic.suggest_lots(conn, ing["id"], qty)
-            conn.close()
+            plan = logic.preview_lots(ing["id"], qty)
             text = "\n".join(f"- ล็อต {lot['id']} (ควรใช้ก่อน {lot['use_by']}): {logic.fmt_qty(t, ing['unit'])}"
                              for lot, t in plan)
             if messagebox.askyesno("ยืนยันการเบิก",

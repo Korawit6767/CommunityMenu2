@@ -151,6 +151,15 @@ def suggest_lots(conn, ing_id, qty, only_usable=True):
     return result
 
 
+def preview_lots(ing_id, qty, only_usable=True):
+    """เสนอล็อตสำหรับ UI พรีวิวก่อนยืนยันเบิก โดย UI ไม่ต้องจัดการ connection เอง"""
+    conn = get_conn()
+    try:
+        return suggest_lots(conn, ing_id, qty, only_usable)
+    finally:
+        conn.close()
+
+
 def issue(conn, ing_id, qty, mtype, ref, reason=""):
     """เบิกใช้ (USE) หรือของเสีย (WASTE) ตามล็อต"""
     if qty <= 0:
